@@ -1,39 +1,39 @@
--- Tabla de notificaciones
+-- ============================================
+-- TABLA DE NOTIFICACIONES
 -- Ejecutar en: https://app.supabase.com/project/_/sql/editor
+-- ============================================
 
+-- 1. Crear tabla
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   message TEXT NOT NULL,
-  type TEXT DEFAULT 'info', -- 'info', 'premium', 'upload', 'admin'
+  type TEXT DEFAULT 'info',
   is_read BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Índice para notificaciones no leídas por usuario
+-- 2. Índices
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 
--- Trigger para notificación automática cuando se sube un recurso
+-- 3. Función para notificación de nuevo recurso
 CREATE OR REPLACE FUNCTION notify_new_resource()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- Notificar a todos los usuarios sobre nuevo recurso
   INSERT INTO notifications (user_id, title, message, type)
   SELECT
     u.id,
     '📄 Nuevo Recurso Disponible',
-    'Se ha añadido un nuevo recurso: ' || NEW.title || ' en la categoría ' || COALESCE(NEW.category, 'General'),
+    'Se ha añadido: ' || COALESCE(NEW.title, NEW.name) || ' (' || COALESCE(NEW.category, 'General') || ')',
     'upload'
-  FROM users u
-  WHERE u.id != NEW.id; -- Excluir al creador si fuera un usuario
-
+  FROM users u;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para notificación cuando usuario se hace premium
+-- 4. Función para notificación premium adquirido
 CREATE OR REPLACE FUNCTION notify_premium_acquired()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -42,7 +42,7 @@ BEGIN
     VALUES (
       NEW.id,
       '💎 ¡Ahora eres PREMIUM!',
-      'Tu plan ' || COALESCE(NEW.premium_plan, 'Premium') || ' ha sido activado. Disfruta de todo el contenido exclusivo hasta ' || TO_CHAR(NEW.subscription_end, 'DD/MM/YYYY'),
+      'Plan: ' || COALESCE(NEW.premium_plan, 'Premium') || ' hasta ' || TO_CHAR(NEW.subscription_end, 'DD/MM/YYYY'),
       'premium'
     );
   END IF;
@@ -50,17 +50,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para notificación cuando premium caduca
+-- 5. Función para notificación premium caducado
 CREATE OR REPLACE FUNCTION notify_premium_expired()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF (OLD.is_premium = true AND NEW.is_premium = false) OR
-     (OLD.subscription_end IS NOT NULL AND NEW.subscription_end IS NOT NULL AND OLD.subscription_end > NEW.subscription_end) THEN
+  IF OLD.is_premium = true AND NEW.is_premium = false THEN
     INSERT INTO notifications (user_id, title, message, type)
     VALUES (
       NEW.id,
       '⏰ Premium Caducado',
-      'Tu suscripción premium ha finalizado. ¡Renueva para seguir accediendo a contenido exclusivo!',
+      'Tu suscripción ha finalizado. ¡Renueva para acceder a contenido exclusivo!',
       'premium'
     );
   END IF;
@@ -68,7 +67,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Aplicar triggers
+-- 6. Crear triggers
 DROP TRIGGER IF EXISTS trigger_notify_new_resource ON resources;
 CREATE TRIGGER trigger_notify_new_resource
   AFTER INSERT ON resources
