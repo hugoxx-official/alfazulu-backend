@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 -- Índice para notificaciones no leídas por usuario
-CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false;
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
 
 -- Trigger para notificación automática cuando se sube un recurso
 CREATE OR REPLACE FUNCTION notify_new_resource()
