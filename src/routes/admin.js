@@ -58,17 +58,19 @@ router.post('/login', async (req, res) => {
 // GET /api/admin/stats - Estadísticas generales
 router.get('/stats', async (req, res) => {
   try {
-    const { count: usersCount } = await req.supabase.from('users').count();
-    const { count: resourcesCount } = await req.supabase.from('resources').count();
-    const { count: downloadsCount } = await req.supabase.from('downloads').count();
-    const { count: mapsCount } = await req.supabase.from('maps').count();
+    const [{ count: usersCount }, { count: resourcesCount }, { count: downloadsCount }, { count: mapsCount }] = await Promise.all([
+      req.supabase.from('users').count(),
+      req.supabase.from('resources').count(),
+      req.supabase.from('downloads').count(),
+      req.supabase.from('maps').count()
+    ]);
 
     res.json({
       stats: {
-        users: usersCount || 0,
-        resources: resourcesCount || 0,
-        downloads: downloadsCount || 0,
-        maps: mapsCount || 0
+        users: usersCount ?? 0,
+        resources: resourcesCount ?? 0,
+        downloads: downloadsCount ?? 0,
+        maps: mapsCount ?? 0
       }
     });
   } catch (error) {
