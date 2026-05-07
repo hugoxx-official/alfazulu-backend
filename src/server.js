@@ -21,10 +21,12 @@ import adminRoutes from './routes/admin.js';
 import telegramRoutes from './routes/telegram.js';
 import filesRoutes from './routes/files.js';
 import statsRoutes from './routes/stats.js';
+import notificationsRoutes from './routes/notifications.js';
 
 // Services
 import { startDriveSync, syncDriveFiles } from './services/driveSync.js';
 import { initTelegramBot, getBot, sendTelegramMessage } from './services/telegramBot.js';
+import { startPremiumExpirationCheck, startWeeklyNotifications } from './services/premiumExpiration.js';
 
 dotenv.config();
 
@@ -139,6 +141,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {
@@ -151,6 +154,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   logger.info(`Backend running on port ${PORT}`);
   const bot = initTelegramBot(logger);
   app.set('telegramBot', bot);
+
+  // Iniciar jobs programados
+  startPremiumExpirationCheck(supabase, logger, bot);
+  startWeeklyNotifications(supabase, logger, bot);
 });
 
 export { app, supabase, logger };

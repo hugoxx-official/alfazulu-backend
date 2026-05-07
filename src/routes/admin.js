@@ -540,6 +540,56 @@ router.post('/resources', async (req, res) => {
   }
 });
 
+// POST /api/admin/notify-all - Enviar notificación a todos los usuarios
+router.post('/notify-all', async (req, res) => {
+  try {
+    const { title, message, type = 'admin' } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ error: 'Title and message required' });
+    }
+
+    // Obtener todos los usuarios
+    const { data: allUsers } = await req.supabase
+      .from('users')
+      .select('id');
+
+    if (!allUsers || allUsers.length === 0) {
+      return res.json({ success: true, sent: 0 });
+    }
+
+    // Insertar notificación para cada usuario
+    const notifications = allUsers.map(user => ({
+      user_id: user.id,
+      title,
+      message,
+      type
+    }));
+
+    // Insertar en lotes de 100
+    for (let i = 0; i < notifications.length; i += 100) {
+      const batch = notifications.slice(i, i + 100);
+      await req.supabase.from('notifications').insert(batch);
+    }
+
+    // Notificar a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `📢 *NOTIFICACIÓN ENVIADA*\n📦 A: ${allUsers.length} usuarios\n📝 Título: ${title}`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    logger.info(`Notificación enviada a ${allUsers.length} usuarios`);
+    res.json({ success: true, sent: allUsers.length });
+  } catch (error) {
+    req.logger.error('Error sending notification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // PUT /api/admin/resources/:id - Actualizar recurso
 router.put('/resources/:id', async (req, res) => {
   try {
