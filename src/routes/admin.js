@@ -94,6 +94,88 @@ router.get('/categories', async (req, res) => {
   }
 });
 
+// POST /api/admin/categories - Añadir nueva categoría
+router.post('/categories', async (req, res) => {
+  try {
+    const { category } = req.body;
+
+    if (!category) {
+      return res.status(400).json({ error: 'Category name required' });
+    }
+
+    // Verificar si ya existe
+    const { data: existing } = await req.supabase
+      .from('resources')
+      .select('category')
+      .eq('category', category)
+      .single();
+
+    if (existing) {
+      return res.status(409).json({ error: 'Category already exists' });
+    }
+
+    // Insertar recurso dummy para registrar la categoría
+    const { data, error } = await req.supabase
+      .from('resources')
+      .insert([{
+        title: `[CATEGORY] ${category}`,
+        category,
+        file_type: 'category_marker',
+        description: 'Category marker - not a real resource',
+        is_premium: false
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `📁 *NUEVA CATEGORÍA*\n${category}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true, category });
+  } catch (error) {
+    req.logger.error('Error creating category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/admin/categories/:name - Eliminar categoría
+router.delete('/categories/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+
+    // Eliminar todos los recursos de esa categoría
+    const { error } = await req.supabase
+      .from('resources')
+      .delete()
+      .eq('category', name);
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `🗑️ *CATEGORÍA ELIMINADA*\n${name}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    req.logger.error('Error deleting category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/admin/sync/force - Forzar sync de Drive
 router.post('/sync/force', async (req, res) => {
   try {
@@ -150,11 +232,12 @@ router.get('/plans', async (req, res) => {
 router.put('/plans/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { display_name, price, color, features, limitations, is_active, sort_order } = req.body;
+    const { display_name, price_monthly, price_lifetime, color, features, limitations, is_active, sort_order } = req.body;
 
     const updateData = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) updateData.display_name = display_name;
-    if (price !== undefined) updateData.price = price;
+    if (price_monthly !== undefined) updateData.price_monthly = price_monthly;
+    if (price_lifetime !== undefined) updateData.price_lifetime = price_lifetime;
     if (color !== undefined) updateData.color = color;
     if (features !== undefined) updateData.features = features;
     if (limitations !== undefined) updateData.limitations = limitations;
@@ -175,7 +258,7 @@ router.put('/plans/:id', async (req, res) => {
     if (bot) {
       await bot.sendMessage(
         process.env.TELEGRAM_CHAT_ID,
-        `⚙️ *PLAN ACTUALIZADO*\nNombre: ${data.display_name}\nPrecio: ${data.price}\nPor: Admin`,
+        `⚙️ *PLAN ACTUALIZADO*\nNombre: ${data.display_name}\nMensual: ${data.price_monthly}\nVitalicio: ${data.price_lifetime}\nPor: Admin`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     }
@@ -190,14 +273,15 @@ router.put('/plans/:id', async (req, res) => {
 // POST /api/admin/plans - Crear nuevo plan premium
 router.post('/plans', async (req, res) => {
   try {
-    const { plan_name, display_name, price, color, features, limitations, sort_order } = req.body;
+    const { plan_name, display_name, price_monthly, price_lifetime, color, features, limitations, sort_order } = req.body;
 
     const { data, error } = await req.supabase
       .from('premium_plans')
       .insert([{
         plan_name,
         display_name,
-        price,
+        price_monthly: price_monthly || '0',
+        price_lifetime: price_lifetime || '0',
         color,
         features: features || [],
         limitations: limitations || [],
@@ -214,7 +298,7 @@ router.post('/plans', async (req, res) => {
     if (bot) {
       await bot.sendMessage(
         process.env.TELEGRAM_CHAT_ID,
-        `➕ *NUEVO PLAN CREADO*\n${data.display_name} - ${data.price}\nPor: Admin`,
+        `➕ *NUEVO PLAN CREADO*\n${data.display_name}\nMensual: ${data.price_monthly}\nVitalicio: ${data.price_lifetime}\nPor: Admin`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     }
@@ -285,16 +369,17 @@ router.post('/premium-request', async (req, res) => {
 // GET /api/admin/stats - Estadísticas reales
 router.get('/stats', async (req, res) => {
   try {
-    const [usersRes, resourcesRes, downloadsRes, mapsRes, premiumRes] = await Promise.all([
+    const [usersRes, resourcesRes, downloadsRes, mapsRes] = await Promise.all([
       req.supabase.from('users').select('*', { count: 'exact', head: true }),
       req.supabase.from('resources').select('*', { count: 'exact', head: true }),
       req.supabase.from('downloads').select('*', { count: 'exact', head: true }),
-      req.supabase.from('maps').select('*', { count: 'exact', head: true }),
-      req.supabase.from('users').select('is_premium', { count: 'exact', head: true })
+      req.supabase.from('maps').select('*', { count: 'exact', head: true })
     ]);
 
-    // Obtener count de usuarios premium
-    const premiumCount = premiumRes.data?.filter(u => u.is_premium === true).length || 0;
+    // Obtener usuarios premium reales
+    const { data: allUsers } = await req.supabase.from('users').select('is_premium, premium_plan');
+    const premiumCount = allUsers?.filter(u => u.is_premium === true).length || 0;
+    const freeCount = (usersRes.count ?? 0) - premiumCount;
 
     res.json({
       stats: {
@@ -303,11 +388,110 @@ router.get('/stats', async (req, res) => {
         total_downloads: downloadsRes.count ?? 0,
         total_maps: mapsRes.count ?? 0,
         premium_users: premiumCount,
-        free_users: (usersRes.count ?? 0) - premiumCount
+        free_users: freeCount
       }
     });
   } catch (error) {
     req.logger.error('Error getting stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/admin/users - Listar todos los usuarios
+router.get('/users', async (req, res) => {
+  try {
+    const { data, error } = await req.supabase
+      .from('users')
+      .select('id, username, is_premium, premium_plan, subscription_end, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ users: data || [] });
+  } catch (error) {
+    req.logger.error('Error getting users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/admin/users/:id - Actualizar usuario (asignar premium)
+router.put('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_premium, premium_plan, subscription_end } = req.body;
+
+    const updateData = {};
+    if (is_premium !== undefined) updateData.is_premium = is_premium;
+    if (premium_plan !== undefined) updateData.premium_plan = premium_plan;
+    if (subscription_end !== undefined) updateData.subscription_end = subscription_end;
+
+    const { data, error } = await req.supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot && is_premium === true) {
+      const subEnd = subscription_end ? new Date(subscription_end).toLocaleDateString('es-ES') : 'N/A';
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `⭐ *USUARIO PREMIUM*\n👤 ID: ${id}\n📦 Plan: ${premium_plan || 'N/A'}\n📅 Hasta: ${subEnd}\n\n✅ Asignado por admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ user: data });
+  } catch (error) {
+    req.logger.error('Error updating user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/admin/resources - Listar recursos para admin
+router.get('/resources', async (req, res) => {
+  try {
+    const { data, error } = await req.supabase
+      .from('resources')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ resources: data || [] });
+  } catch (error) {
+    req.logger.error('Error getting resources:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/admin/resources/:id - Eliminar recurso
+router.delete('/resources/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await req.supabase
+      .from('resources')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `🗑️ *RECURSO ELIMINADO*\nID: ${id}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    req.logger.error('Error deleting resource:', error);
     res.status(500).json({ error: error.message });
   }
 });
