@@ -496,4 +496,91 @@ router.delete('/resources/:id', async (req, res) => {
   }
 });
 
+// POST /api/admin/resources - Crear nuevo recurso
+router.post('/resources', async (req, res) => {
+  try {
+    const { title, description, category, file_type, file_size, download_url, thumbnail_url, is_premium } = req.body;
+
+    if (!title || !category) {
+      return res.status(400).json({ error: 'Title and category required' });
+    }
+
+    const { data, error } = await req.supabase
+      .from('resources')
+      .insert([{
+        name: title,
+        title,
+        description: description || null,
+        category,
+        file_type: file_type || 'PDF',
+        file_size: file_size || 0,
+        download_url: download_url || null,
+        thumbnail_url: thumbnail_url || null,
+        is_premium: is_premium ?? false
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `📄 *NUEVO RECURSO*\n${title}\nCategoría: ${category}\nPremium: ${is_premium ? 'Sí' : 'No'}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ resource: data });
+  } catch (error) {
+    req.logger.error('Error creating resource:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/admin/resources/:id - Actualizar recurso
+router.put('/resources/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, description, category, file_type, file_size, download_url, thumbnail_url, is_premium } = req.body;
+
+    const updateData = {};
+    if (title !== undefined) updateData.name = title;
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (category !== undefined) updateData.category = category;
+    if (file_type !== undefined) updateData.file_type = file_type;
+    if (file_size !== undefined) updateData.file_size = file_size;
+    if (download_url !== undefined) updateData.download_url = download_url;
+    if (thumbnail_url !== undefined) updateData.thumbnail_url = thumbnail_url;
+    if (is_premium !== undefined) updateData.is_premium = is_premium;
+
+    const { data, error } = await req.supabase
+      .from('resources')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `✏️ *RECURSO ACTUALIZADO*\n${data.title || data.name}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ resource: data });
+  } catch (error) {
+    req.logger.error('Error updating resource:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

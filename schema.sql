@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS resources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  title TEXT,
   description TEXT,
   category TEXT,
   file_type TEXT,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS resources (
   file_path TEXT,
   views INTEGER DEFAULT 0,
   downloads INTEGER DEFAULT 0,
+  is_premium BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
