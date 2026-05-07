@@ -129,4 +129,51 @@ router.post('/notify', async (req, res) => {
   }
 });
 
+// GET /api/admin/plans - Obtener todos los planes premium
+router.get('/plans', async (req, res) => {
+  try {
+    const { data, error } = await req.supabase
+      .from('premium_plans')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (error) throw error;
+    res.json({ plans: data || [] });
+  } catch (error) {
+    req.logger.error('Error getting plans:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/admin/plans/:id - Actualizar un plan premium
+router.put('/plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { display_name, price, color, features, limitations } = req.body;
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+    if (display_name !== undefined) updateData.display_name = display_name;
+    if (price !== undefined) updateData.price = price;
+    if (color !== undefined) updateData.color = color;
+    if (features !== undefined) updateData.features = features;
+    if (limitations !== undefined) updateData.limitations = limitations;
+
+    const { data, error } = await req.supabase
+      .from('premium_plans')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ plan: data });
+  } catch (error) {
+    req.logger.error('Error updating plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
