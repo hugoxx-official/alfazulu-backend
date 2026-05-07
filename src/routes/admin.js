@@ -1,6 +1,59 @@
 import express from 'express';
+import bcrypt from 'bcrypt';
 
 const router = express.Router();
+
+// POST /api/admin/login - Login de administrador
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // Buscar usuario
+    const { data: user, error } = await req.supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Verificar password (si existe hash) o comparar directo
+    let isValid = false;
+    if (user.password_hash) {
+      isValid = await bcrypt.compare(password, user.password_hash);
+    } else if (user.password) {
+      isValid = password === user.password;
+    }
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Verificar si es admin (campo is_admin o username específico)
+    const isAdmin = user.is_admin === true || user.username === 'admin';
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        is_admin: isAdmin
+      }
+    });
+  } catch (error) {
+    req.logger.error('Admin login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // GET /api/admin/stats - Estadísticas generales
 router.get('/stats', async (req, res) => {

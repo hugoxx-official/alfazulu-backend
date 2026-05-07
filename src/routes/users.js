@@ -37,6 +37,33 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/premium - Actualizar estado premium
+router.patch('/:id/premium', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_premium, premium_plan, subscription_end } = req.body;
+
+    const updateData = {
+      is_premium: is_premium ?? false,
+      premium_plan: premium_plan ?? null,
+      subscription_end: subscription_end ?? null,
+    };
+
+    const { data, error } = await req.supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ user: data });
+  } catch (error) {
+    req.logger.error('Error updating premium status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/users - Listar usuarios
 router.get('/', async (req, res) => {
   try {
