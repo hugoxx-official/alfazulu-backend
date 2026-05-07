@@ -52,4 +52,23 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/downloads/:user_id - Listar descargas de un usuario
+router.get('/:user_id', async (req, res) => {
+  try {
+    const { user_id } = req.params;
+
+    const { data, error } = await req.supabase
+      .from('downloads')
+      .select('*, resources(name, category, file_type)')
+      .eq('user_id', user_id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ downloads: data || [] });
+  } catch (error) {
+    req.logger.error('Error getting user downloads:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
