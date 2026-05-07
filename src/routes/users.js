@@ -76,6 +76,26 @@ router.patch('/:id/premium', async (req, res) => {
   }
 });
 
+// GET /api/users/:id - Obtener usuario por ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await req.supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ user: data });
+  } catch (error) {
+    req.logger.error('Error getting user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/users - Listar usuarios
 router.get('/', async (req, res) => {
   try {
