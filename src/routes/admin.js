@@ -150,16 +150,16 @@ router.get('/plans', async (req, res) => {
 router.put('/plans/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { display_name, price, color, features, limitations } = req.body;
+    const { display_name, price, color, features, limitations, is_active, sort_order } = req.body;
 
-    const updateData = {
-      updated_at: new Date().toISOString()
-    };
+    const updateData = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) updateData.display_name = display_name;
     if (price !== undefined) updateData.price = price;
     if (color !== undefined) updateData.color = color;
     if (features !== undefined) updateData.features = features;
     if (limitations !== undefined) updateData.limitations = limitations;
+    if (is_active !== undefined) updateData.is_active = is_active;
+    if (sort_order !== undefined) updateData.sort_order = sort_order;
 
     const { data, error } = await req.supabase
       .from('premium_plans')
@@ -169,9 +169,145 @@ router.put('/plans/:id', async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `⚙️ *PLAN ACTUALIZADO*\nNombre: ${data.display_name}\nPrecio: ${data.price}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
     res.json({ plan: data });
   } catch (error) {
     req.logger.error('Error updating plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/plans - Crear nuevo plan premium
+router.post('/plans', async (req, res) => {
+  try {
+    const { plan_name, display_name, price, color, features, limitations, sort_order } = req.body;
+
+    const { data, error } = await req.supabase
+      .from('premium_plans')
+      .insert([{
+        plan_name,
+        display_name,
+        price,
+        color,
+        features: features || [],
+        limitations: limitations || [],
+        sort_order: sort_order || 0,
+        is_active: true
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `➕ *NUEVO PLAN CREADO*\n${data.display_name} - ${data.price}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ plan: data });
+  } catch (error) {
+    req.logger.error('Error creating plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/admin/plans/:id - Eliminar plan premium
+router.delete('/plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await req.supabase
+      .from('premium_plans')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `🗑️ *PLAN ELIMINADO*\nID: ${id}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    req.logger.error('Error deleting plan:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/premium-request - Solicitar plan premium (envía a Telegram)
+router.post('/premium-request', async (req, res) => {
+  try {
+    const { user_id, username, plan_name, payment_method } = req.body;
+
+    if (!user_id || !username || !plan_name) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Enviar a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      const message = `💎 *SOLICITUD PREMIUM*\n\n👤 Usuario: ${username}\n📦 Plan: ${plan_name}\n💳 Método: ${payment_method || 'No especificado'}\n\n⚠️ Revisar y aprobar desde panel admin`;
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        message,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    res.json({ success: true, message: 'Solicitud enviada al administrador' });
+  } catch (error) {
+    req.logger.error('Error sending premium request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/admin/stats - Estadísticas reales
+router.get('/stats', async (req, res) => {
+  try {
+    const [usersRes, resourcesRes, downloadsRes, mapsRes, premiumRes] = await Promise.all([
+      req.supabase.from('users').select('*', { count: 'exact', head: true }),
+      req.supabase.from('resources').select('*', { count: 'exact', head: true }),
+      req.supabase.from('downloads').select('*', { count: 'exact', head: true }),
+      req.supabase.from('maps').select('*', { count: 'exact', head: true }),
+      req.supabase.from('users').select('is_premium', { count: 'exact', head: true })
+    ]);
+
+    // Obtener count de usuarios premium
+    const premiumCount = premiumRes.data?.filter(u => u.is_premium === true).length || 0;
+
+    res.json({
+      stats: {
+        total_users: usersRes.count ?? 0,
+        total_resources: resourcesRes.count ?? 0,
+        total_downloads: downloadsRes.count ?? 0,
+        total_maps: mapsRes.count ?? 0,
+        premium_users: premiumCount,
+        free_users: (usersRes.count ?? 0) - premiumCount
+      }
+    });
+  } catch (error) {
+    req.logger.error('Error getting stats:', error);
     res.status(500).json({ error: error.message });
   }
 });

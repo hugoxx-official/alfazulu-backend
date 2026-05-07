@@ -119,4 +119,87 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// POST /api/resources/:id/favorite - Toggle favorito (por usuario)
+router.post('/:id/favorite', async (req, res) => {
+  try {
+    const { id: resourceId } = req.params;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: 'user_id required' });
+    }
+
+    // Obtener usuario actual
+    const { data: user, error: userError } = await req.supabase
+      .from('users')
+      .select('favorites')
+      .eq('id', user_id)
+      .single();
+
+    if (userError) throw userError;
+
+    let favorites = user?.favorites || [];
+    const isFavorite = favorites.includes(resourceId);
+
+    // Añadir o quitar de favoritos
+    if (isFavorite) {
+      favorites = favorites.filter(f => f !== resourceId);
+    } else {
+      favorites.push(resourceId);
+    }
+
+    // Actualizar usuario
+    const { data: updatedUser, error: updateError } = await req.supabase
+      .from('users')
+      .update({ favorites })
+      .eq('id', user_id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({
+      success: true,
+      is_favorite: !isFavorite,
+      favorites: updatedUser.favorites
+    });
+  } catch (error) {
+    req.logger.error('Error toggling favorite:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/resources/favorites/:user_id - Obtener favoritos de un usuario
+router.get('/favorites/:user_id', async (req, res) => {
+  try {
+    const { user_id } = req.params;
+
+    const { data: user, error } = await req.supabase
+      .from('users')
+      .select('favorites')
+      .eq('id', user_id)
+      .single();
+
+    if (error) throw error;
+
+    const favoriteIds = user?.favorites || [];
+
+    if (favoriteIds.length === 0) {
+      return res.json({ resources: [] });
+    }
+
+    const { data: resources, error: resourcesError } = await req.supabase
+      .from('resources')
+      .select('*')
+      .in('id', favoriteIds);
+
+    if (resourcesError) throw resourcesError;
+
+    res.json({ resources: resources || [] });
+  } catch (error) {
+    req.logger.error('Error getting favorites:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

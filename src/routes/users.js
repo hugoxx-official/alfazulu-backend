@@ -57,6 +57,18 @@ router.patch('/:id/premium', async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot && is_premium === true) {
+      const subEnd = subscription_end ? new Date(subscription_end).toLocaleDateString() : 'N/A';
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `⭐ *USUARIO PREMIUM*\n👤 ID: ${id}\n📦 Plan: ${premium_plan || 'N/A'}\n📅 Hasta: ${subEnd}\n\n✅ Asignado por admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
     res.json({ user: data });
   } catch (error) {
     req.logger.error('Error updating premium status:', error);
