@@ -417,12 +417,29 @@ router.get('/users', async (req, res) => {
 router.put('/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { is_premium, premium_plan, subscription_end } = req.body;
+    const { is_premium, premium_plan, subscription_end, selected_plan_id } = req.body;
 
     const updateData = {};
     if (is_premium !== undefined) updateData.is_premium = is_premium;
     if (premium_plan !== undefined) updateData.premium_plan = premium_plan;
     if (subscription_end !== undefined) updateData.subscription_end = subscription_end;
+
+    // If selected_plan_id is provided, get plan details from premium_plans table
+    let planDetails = null;
+    if (selected_plan_id) {
+      const { data: planData } = await req.supabase
+        .from('premium_plans')
+        .select('plan_name, display_name, price_monthly, price_lifetime, color')
+        .eq('id', selected_plan_id)
+        .single();
+
+      if (planData) {
+        planDetails = planData;
+        if (!updateData.premium_plan) {
+          updateData.premium_plan = planData.plan_name;
+        }
+      }
+    }
 
     const { data, error } = await req.supabase
       .from('users')
@@ -437,16 +454,103 @@ router.put('/users/:id', async (req, res) => {
     const bot = req.app.get('telegramBot');
     if (bot && is_premium === true) {
       const subEnd = subscription_end ? new Date(subscription_end).toLocaleDateString('es-ES') : 'N/A';
+      const planName = planDetails?.display_name || premium_plan || 'N/A';
       await bot.sendMessage(
         process.env.TELEGRAM_CHAT_ID,
-        `⭐ *USUARIO PREMIUM*\n👤 ID: ${id}\n📦 Plan: ${premium_plan || 'N/A'}\n📅 Hasta: ${subEnd}\n\n✅ Asignado por admin`,
+        `⭐ *USUARIO PREMIUM*\n👤 ID: ${id}\n📦 Plan: ${planName}\n📅 Hasta: ${subEnd}\n\n✅ Asignado por admin`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     }
 
-    res.json({ user: data });
+    res.json({ user: data, plan: planDetails });
   } catch (error) {
     req.logger.error('Error updating user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/users/:id/assign-plan - Asignar plan premium específico
+router.post('/users/:id/assign-plan', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { plan_id, duration_months, custom_end_date } = req.body;
+
+    if (!plan_id) {
+      return res.status(400).json({ error: 'plan_id required' });
+    }
+
+    // Get plan details
+    const { data: planData, error: planError } = await req.supabase
+      .from('premium_plans')
+      .select('*')
+      .eq('id', plan_id)
+      .single();
+
+    if (planError || !planData) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    // Calculate subscription end date
+    let subscriptionEnd;
+    if (custom_end_date) {
+      subscriptionEnd = new Date(custom_end_date).toISOString();
+    } else if (duration_months) {
+      subscriptionEnd = new Date();
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + duration_months);
+      subscriptionEnd = subscriptionEnd.toISOString();
+    } else {
+      // Default: 1 month for monthly plans, 1 year for lifetime
+      const isLifetime = planData.plan_name?.toLowerCase().includes('lifetime') ||
+                        planData.plan_name?.toLowerCase().includes('vitalicio');
+      subscriptionEnd = new Date();
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + (isLifetime ? 12 : 1));
+      subscriptionEnd = subscriptionEnd.toISOString();
+    }
+
+    // Update user
+    const { data, error } = await req.supabase
+      .from('users')
+      .update({
+        is_premium: true,
+        premium_plan: planData.plan_name,
+        subscription_end: subscriptionEnd
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Create notification for user
+    await req.supabase.from('notifications').insert({
+      user_id: id,
+      title: '¡Plan Activado!',
+      message: `Tu plan ${planData.display_name} ha sido activado. Disfruta de todas las características premium.`,
+      type: 'premium'
+    });
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `⭐ *PLAN ASIGNADO*\n👤 User ID: ${id}\n📦 Plan: ${planData.display_name}\n💰 Mensual: ${planData.price_monthly}€\n💎 Vitalicio: ${planData.price_lifetime}€\n📅 Hasta: ${new Date(subscriptionEnd).toLocaleDateString('es-ES')}\n\n✅ Asignado por admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      user: data,
+      plan: {
+        name: planData.plan_name,
+        displayName: planData.display_name,
+        color: planData.color,
+        subscriptionEnd
+      }
+    });
+  } catch (error) {
+    req.logger.error('Error assigning plan:', error);
     res.status(500).json({ error: error.message });
   }
 });
