@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await req.supabase
       .from('downloads')
       .select('*, users(username), resources(name)')
-      .order('created_at', { ascending: false });
+      .order('downloaded_at', { ascending: false });
 
     if (error) throw error;
     res.json({ downloads: data || [] });
@@ -61,7 +61,7 @@ router.get('/:user_id', async (req, res) => {
       .from('downloads')
       .select('*, resources(name, category, file_type)')
       .eq('user_id', user_id)
-      .order('created_at', { ascending: false });
+      .order('downloaded_at', { ascending: false });
 
     if (error) throw error;
     res.json({ downloads: data || [] });

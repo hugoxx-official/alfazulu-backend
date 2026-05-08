@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
     const { count: todayDownloads } = await req.supabase
       .from('downloads')
       .count()
-      .gte('created_at', today);
+      .gte('downloaded_at', today);
 
     res.json({
       stats: {
