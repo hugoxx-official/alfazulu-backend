@@ -451,6 +451,22 @@ router.put('/users/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/maps - Listar mapas para admin
+router.get('/maps', async (req, res) => {
+  try {
+    const { data, error } = await req.supabase
+      .from('maps')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json({ maps: data || [] });
+  } catch (error) {
+    req.logger.error('Error getting maps:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/admin/resources - Listar recursos para admin
 router.get('/resources', async (req, res) => {
   try {
@@ -582,7 +598,7 @@ router.post('/notify-all', async (req, res) => {
       ).catch(() => {});
     }
 
-    logger.info(`Notificación enviada a ${allUsers.length} usuarios`);
+    req.logger.info(`Notificación enviada a ${allUsers.length} usuarios`);
     res.json({ success: true, sent: allUsers.length });
   } catch (error) {
     req.logger.error('Error sending notification:', error);
