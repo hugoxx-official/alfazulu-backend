@@ -132,6 +132,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Redirect /app to download landing
+app.get('/app', (req, res) => {
+  res.redirect('https://descargarapp-production.up.railway.app');
+});
+
 // Routes
 app.use('/api/resources', resourcesRoutes);
 app.use('/api/maps', mapsRoutes);
