@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "build": "mkdir logs 2>/dev/null || true",
-    "test": "node --experimental-vm-modules ../tests/backend.test.js"
+    "test": "node --experimental-vm-modules ../tests/backend.test.js",
+    "postinstall": "echo 'Deploying...'"
   },
   "engines": {
     "node": ">=18.0.0"
