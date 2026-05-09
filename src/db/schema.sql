@@ -164,10 +164,10 @@ CREATE TABLE IF NOT EXISTS premium_plans (
   price_lifetime TEXT DEFAULT '0',
   -- Color hexadecimal para UI (ej: #FF003C)
   color TEXT DEFAULT '#FF003C',
-  -- Lista de ventajas/características
-  features TEXT[] DEFAULT '{}',
-  -- Lista de limitaciones
-  limitations TEXT[] DEFAULT '{}',
+  -- Lista de ventajas/características (JSONB)
+  features JSONB DEFAULT '[]'::jsonb,
+  -- Lista de limitaciones (JSONB)
+  limitations JSONB DEFAULT '[]'::jsonb,
   -- Si el plan está activo y visible
   is_active BOOLEAN DEFAULT true,
   -- Orden de visualización (menor = primero)
@@ -311,22 +311,22 @@ CREATE TRIGGER update_premium_plans_updated_at
 -- Planes premium por defecto (solo si está vacía)
 INSERT INTO premium_plans (plan_name, display_name, price_monthly, price_lifetime, color, features, limitations, sort_order)
 SELECT 'basic', 'BASIC', '5', '50', '#4A90D9',
-       ARRAY['Acceso a recursos básicos', 'Descargas limitadas (5/día)', 'Sin publicidad'],
-       ARRAY['Sin acceso a mapas premium', 'Sin notificaciones prioritarias', 'Soporte básico'],
+       '["Acceso a recursos básicos", "Descargas limitadas (5/día)", "Sin publicidad"]'::jsonb,
+       '["Sin acceso a mapas premium", "Sin notificaciones prioritarias", "Soporte básico"]'::jsonb,
        1
 WHERE NOT EXISTS (SELECT 1 FROM premium_plans WHERE plan_name = 'basic');
 
 INSERT INTO premium_plans (plan_name, display_name, price_monthly, price_lifetime, color, features, limitations, sort_order)
 SELECT 'premium', 'PREMIUM', '10', '100', '#FFD700',
-       ARRAY['Acceso a todos los recursos', 'Descargas ilimitadas', 'Mapas premium', 'Soporte prioritario'],
-       ARRAY['Sin acceso anticipado a contenido TGCF'],
+       '["Acceso a todos los recursos", "Descargas ilimitadas", "Mapas premium", "Soporte prioritario"]'::jsonb,
+       '["Sin acceso anticipado a contenido TGCF"]'::jsonb,
        2
 WHERE NOT EXISTS (SELECT 1 FROM premium_plans WHERE plan_name = 'premium');
 
 INSERT INTO premium_plans (plan_name, display_name, price_monthly, price_lifetime, color, features, limitations, sort_order)
 SELECT 'premium_plus', 'PREMIUM+', '15', '150', '#FF003C',
-       ARRAY['Todo lo de Premium', 'Acceso anticipado a contenido TGCF', 'Contenido exclusivo', 'Notificaciones instantáneas', 'Soporte VIP 24/7'],
-       ARRAY[],
+       '["Todo lo de Premium", "Acceso anticipado a contenido TGCF", "Contenido exclusivo", "Notificaciones instantáneas", "Soporte VIP 24/7"]'::jsonb,
+       '[]'::jsonb,
        3
 WHERE NOT EXISTS (SELECT 1 FROM premium_plans WHERE plan_name = 'premium_plus');
 
