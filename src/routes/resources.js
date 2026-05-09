@@ -71,7 +71,6 @@ router.post('/', upload.single('file'), async (req, res) => {
         category,
         description,
         file_url: fileUrl,
-        file_name: file.originalname,
         file_size: file.size,
         mime_type: file.mimetype
       }])

@@ -64,7 +64,6 @@ export async function syncDriveFiles(supabase, logger) {
           .from('resources')
           .update({
             file_url: file.webContentLink,
-            file_name: file.name,
             file_size: file.size ? parseInt(file.size) : 0,
             mime_type: file.mimeType,
             category
@@ -77,7 +76,6 @@ export async function syncDriveFiles(supabase, logger) {
           .insert([{
             name: file.name,
             file_url: file.webContentLink,
-            file_name: file.name,
             file_size: file.size ? parseInt(file.size) : 0,
             mime_type: file.mimeType,
             category,

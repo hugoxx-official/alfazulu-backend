@@ -58,19 +58,34 @@ router.post('/login', async (req, res) => {
 // GET /api/admin/stats - Estadísticas generales
 router.get('/stats', async (req, res) => {
   try {
-    const [usersRes, resourcesRes, downloadsRes, mapsRes] = await Promise.all([
-      req.supabase.from('users').select('*', { count: 'exact', head: true }),
+    // Contar recursos, descargas y mapas
+    const [resourcesRes, downloadsRes, mapsRes] = await Promise.all([
       req.supabase.from('resources').select('*', { count: 'exact', head: true }),
       req.supabase.from('downloads').select('*', { count: 'exact', head: true }),
       req.supabase.from('maps').select('*', { count: 'exact', head: true })
     ]);
 
+    // Obtener todos los usuarios para contar premium/free
+    const { data: usersData } = await req.supabase
+      .from('users')
+      .select('is_premium, premium_plan');
+
+    const totalUsers = usersData?.length ?? 0;
+    const premiumUsers = usersData?.filter(u =>
+      u.is_premium === true &&
+      u.premium_plan &&
+      u.premium_plan.toLowerCase() !== 'free'
+    ).length ?? 0;
+    const freeUsers = totalUsers - premiumUsers;
+
     res.json({
       stats: {
-        users: usersRes.count ?? 0,
-        resources: resourcesRes.count ?? 0,
-        downloads: downloadsRes.count ?? 0,
-        maps: mapsRes.count ?? 0
+        total_resources: resourcesRes.count ?? 0,
+        total_users: totalUsers,
+        total_downloads: downloadsRes.count ?? 0,
+        total_maps: mapsRes.count ?? 0,
+        premium_users: premiumUsers,
+        free_users: freeUsers
       }
     });
   } catch (error) {

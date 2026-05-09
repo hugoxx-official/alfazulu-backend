@@ -22,13 +22,13 @@ router.post('/', async (req, res) => {
     // Obtener info del recurso para devolver URL
     const { data: resource } = await req.supabase
       .from('resources')
-      .select('file_url, file_name')
+      .select('file_url, name')
       .eq('id', resource_id)
       .single();
 
     res.json({
       download_url: resource?.file_url || '',
-      file_name: resource?.file_name || 'download'
+      file_name: resource?.name || 'download'
     });
   } catch (error) {
     req.logger.error('Error registering download:', error);
