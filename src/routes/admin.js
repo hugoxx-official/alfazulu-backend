@@ -547,6 +547,43 @@ router.get('/maps', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/maps/:id - Eliminar mapa
+router.delete('/maps/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await req.supabase
+      .from('maps')
+      .delete()
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      req.logger.error('Supabase error deleting map:', error);
+      return res.status(500).json({ error: error.message, details: error });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Map not found' });
+    }
+
+    // Log a Telegram
+    const bot = req.app.get('telegramBot');
+    if (bot) {
+      await bot.sendMessage(
+        process.env.TELEGRAM_CHAT_ID,
+        `🗑️ *MAPA ELIMINADO*\nID: ${id}\nPor: Admin`,
+        { parse_mode: 'Markdown' }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    req.logger.error('Error deleting map:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/admin/resources - Listar recursos para admin
 router.get('/resources', async (req, res) => {
   try {
