@@ -9,7 +9,7 @@
     "start": "node src/server.js",
     "build": "mkdir logs 2>/dev/null || true",
     "test": "node --experimental-vm-modules ../tests/backend.test.js",
-    "postinstall": "echo 'Deploying v1.0.2' && npm run build"
+    "postinstall": "echo 'Deploying v1.0.3' && npm run build"
   },
   "engines": {
     "node": ">=18.0.0"

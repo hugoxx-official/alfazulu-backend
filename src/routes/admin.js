@@ -567,6 +567,12 @@ router.delete('/resources/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // First delete related downloads to avoid foreign key constraint violation
+    await req.supabase
+      .from('downloads')
+      .delete()
+      .eq('resource_id', id);
+
     const { data, error } = await req.supabase
       .from('resources')
       .delete()
