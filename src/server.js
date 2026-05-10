@@ -102,6 +102,9 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
+// Trust proxy for Railway (required for rate limiting behind reverse proxy)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet());
 app.use(cors({
