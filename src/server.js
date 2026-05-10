@@ -125,10 +125,17 @@ app.use((req, res, next) => {
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // 100 requests per 15 minutes
 });
 app.use('/api', limiter);
+
+// Higher limit for admin routes
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500 // 500 requests per 15 minutes for admin operations
+});
+app.use('/api/admin', adminLimiter);
 
 // Health check
 app.get('/health', (req, res) => {
