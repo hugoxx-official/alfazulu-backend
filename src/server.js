@@ -148,7 +148,7 @@ app.get('/health', (req, res) => {
 
 // Redirect /app to download landing
 app.get('/app', (req, res) => {
-  res.redirect('https://descargarapp-production.up.railway.app');
+  res.redirect('https://descarga.alfazulu.pro');
 });
 
 // SPA Fallback - servir index.html para cualquier ruta no API
