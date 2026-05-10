@@ -123,6 +123,7 @@ router.post('/categories', async (req, res) => {
     const { data, error } = await req.supabase
       .from('resources')
       .insert([{
+        name: category,
         title: `[CATEGORY] ${category}`,
         category,
         file_type: 'category_marker',
