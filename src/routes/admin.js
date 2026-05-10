@@ -741,6 +741,8 @@ router.post('/notify-all', async (req, res) => {
   try {
     const { title, message, type = 'admin', send_push = true } = req.body;
 
+    req.logger.info(`Notify-all request: title=${title}, send_push=${send_push}`);
+
     if (!title || !message) {
       return res.status(400).json({ error: 'Title and message required' });
     }
@@ -749,6 +751,8 @@ router.post('/notify-all', async (req, res) => {
     const { data: allUsers } = await req.supabase
       .from('users')
       .select('id');
+
+    req.logger.info(`Found ${allUsers?.length || 0} users`);
 
     if (!allUsers || allUsers.length === 0) {
       return res.json({ success: true, sent: 0 });
@@ -768,6 +772,8 @@ router.post('/notify-all', async (req, res) => {
       await req.supabase.from('notifications').insert(batch);
     }
 
+    req.logger.info(`Notifications inserted in DB`);
+
     // Send push notifications if enabled
     let pushSent = 0;
     if (send_push) {
@@ -778,13 +784,17 @@ router.post('/notify-all', async (req, res) => {
         .from('user_devices')
         .select('device_token');
 
+      req.logger.info(`Found ${devices?.length || 0} device tokens`);
+
       if (devices && devices.length > 0) {
         const tokens = [...new Set(devices.map(d => d.device_token))];
+        req.logger.info(`Sending push to ${tokens.length} unique tokens`);
 
         // Send in batches of 500 (FCM limit)
         for (let i = 0; i < tokens.length; i += 500) {
           const batch = tokens.slice(i, i + 500);
           const result = await sendPushToMultiple(batch, title, message, { type });
+          req.logger.info(`Push result: ${JSON.stringify(result)}`);
           if (result.success) {
             pushSent += result.successCount || 0;
           }
