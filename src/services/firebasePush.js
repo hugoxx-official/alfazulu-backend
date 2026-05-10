@@ -7,6 +7,11 @@ let messaging = null;
 
 // Initialize Firebase Admin SDK
 export function initFirebasePush() {
+  console.log('initFirebasePush called');
+  console.log('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? 'set' : 'not set');
+  console.log('FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY ? 'set' : 'not set');
+  console.log('FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL ? 'set' : 'not set');
+
   try {
     // Check if Firebase is already initialized
     if (admin.apps.length > 0) {
@@ -15,36 +20,59 @@ export function initFirebasePush() {
       return messaging;
     }
 
-    // Try to initialize with service account file
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json';
+    // Try to initialize with environment variables (Railway-friendly)
+    const serviceAccount = {
+      type: 'service_account',
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      client_id: process.env.FIREBASE_CLIENT_ID,
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+      client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL
+    };
 
-    try {
-      const serviceAccount = require(serviceAccountPath);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      messaging = admin.messaging();
-      console.log('Firebase Admin initialized with service account');
-      return messaging;
-    } catch (fileError) {
-      console.log('Service account file not found, using environment variables');
+    console.log('Service account config:', {
+      project_id: serviceAccount.project_id,
+      private_key: serviceAccount.private_key ? 'set (' + serviceAccount.private_key.length + ' chars)' : 'not set',
+      client_email: serviceAccount.client_email
+    });
 
-      // Fallback to environment variables (for Railway deployment)
-      if (process.env.FIREBASE_PROJECT_ID) {
+    if (serviceAccount.project_id && serviceAccount.private_key && serviceAccount.client_email) {
+      try {
         admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-          projectId: process.env.FIREBASE_PROJECT_ID
+          credential: admin.credential.cert(serviceAccount)
         });
         messaging = admin.messaging();
-        console.log('Firebase Admin initialized with application default credentials');
+        console.log('Firebase Admin initialized with env vars');
         return messaging;
+      } catch (certError) {
+        console.error('Error with cert credentials:', certError.message);
+        console.error('Stack:', certError.stack);
       }
-
-      console.warn('Firebase credentials not configured. Push notifications disabled.');
-      return null;
     }
+
+    // Fallback: try to load from file (local development)
+    try {
+      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json';
+      const fileAccount = require(serviceAccountPath);
+      admin.initializeApp({
+        credential: admin.credential.cert(fileAccount)
+      });
+      messaging = admin.messaging();
+      console.log('Firebase Admin initialized with service account file');
+      return messaging;
+    } catch (fileError) {
+      console.log('Service account file not found:', fileError.message);
+    }
+
+    console.warn('Firebase credentials not configured. Push notifications disabled.');
+    return null;
   } catch (error) {
     console.error('Error initializing Firebase Admin:', error.message);
+    console.error('Stack:', error.stack);
     return null;
   }
 }
@@ -142,6 +170,8 @@ export async function sendPushToTopic(topic, title, body, data = {}) {
 
 // Send push notification to multiple tokens (batch)
 export async function sendPushToMultiple(tokens, title, body, data = {}) {
+  console.log(`sendPushToMultiple called with ${tokens.length} tokens`);
+
   if (!messaging) {
     console.warn('Firebase not initialized, skipping push notification');
     return { success: false, reason: 'firebase_not_initialized' };
@@ -165,8 +195,10 @@ export async function sendPushToMultiple(tokens, title, body, data = {}) {
       }
     }));
 
+    console.log('Sending messages to FCM...');
     const batchResponse = await messaging.sendEach(messages);
-    console.log(`Successfully sent ${batchResponse.successCount} of ${tokens.length} push notifications`);
+    console.log(`FCM response: ${batchResponse.successCount}/${tokens.length} success`);
+
     return {
       success: batchResponse.successCount > 0,
       successCount: batchResponse.successCount,
@@ -175,6 +207,7 @@ export async function sendPushToMultiple(tokens, title, body, data = {}) {
     };
   } catch (error) {
     console.error('Error sending batch push notifications:', error.message);
+    console.error('Stack:', error.stack);
     return { success: false, error: error.message };
   }
 }
