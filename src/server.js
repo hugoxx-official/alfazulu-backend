@@ -140,6 +140,14 @@ app.get('/app', (req, res) => {
   res.redirect('https://descargarapp-production.up.railway.app');
 });
 
+// SPA Fallback - servir index.html para cualquier ruta no API
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, '../web/index.html'));
+});
+
 // Routes
 app.use('/api/resources', resourcesRoutes);
 app.use('/api/maps', mapsRoutes);
