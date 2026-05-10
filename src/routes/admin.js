@@ -58,34 +58,24 @@ router.post('/login', async (req, res) => {
 // GET /api/admin/stats - Estadísticas generales
 router.get('/stats', async (req, res) => {
   try {
-    // Contar recursos, descargas y mapas
-    const [resourcesRes, downloadsRes, mapsRes] = await Promise.all([
+    const [usersRes, resourcesRes, downloadsRes, mapsRes] = await Promise.all([
+      req.supabase.from('users').select('*', { count: 'exact', head: true }),
       req.supabase.from('resources').select('*', { count: 'exact', head: true }),
       req.supabase.from('downloads').select('*', { count: 'exact', head: true }),
       req.supabase.from('maps').select('*', { count: 'exact', head: true })
     ]);
 
-    // Obtener todos los usuarios para contar premium/free
-    const { data: usersData } = await req.supabase
-      .from('users')
-      .select('is_premium, premium_plan');
-
-    const totalUsers = usersData?.length ?? 0;
-    const premiumUsers = usersData?.filter(u =>
-      u.is_premium === true &&
-      u.premium_plan &&
-      u.premium_plan.toLowerCase() !== 'free'
-    ).length ?? 0;
-    const freeUsers = totalUsers - premiumUsers;
+    const { data: allUsers } = await req.supabase.from('users').select('is_premium');
+    const premiumCount = allUsers?.filter(u => u.is_premium === true).length || 0;
 
     res.json({
       stats: {
+        total_users: usersRes.count ?? 0,
         total_resources: resourcesRes.count ?? 0,
-        total_users: totalUsers,
         total_downloads: downloadsRes.count ?? 0,
         total_maps: mapsRes.count ?? 0,
-        premium_users: premiumUsers,
-        free_users: freeUsers
+        premium_users: premiumCount,
+        free_users: (usersRes.count ?? 0) - premiumCount
       }
     });
   } catch (error) {
@@ -123,9 +113,9 @@ router.post('/categories', async (req, res) => {
       .from('resources')
       .select('category')
       .eq('category', category)
-      .single();
+      .limit(1);
 
-    if (existing) {
+    if (existing && existing.length > 0) {
       return res.status(409).json({ error: 'Category already exists' });
     }
 
@@ -381,36 +371,6 @@ router.post('/premium-request', async (req, res) => {
   }
 });
 
-// GET /api/admin/stats - Estadísticas reales
-router.get('/stats', async (req, res) => {
-  try {
-    const [usersRes, resourcesRes, downloadsRes, mapsRes] = await Promise.all([
-      req.supabase.from('users').select('*', { count: 'exact', head: true }),
-      req.supabase.from('resources').select('*', { count: 'exact', head: true }),
-      req.supabase.from('downloads').select('*', { count: 'exact', head: true }),
-      req.supabase.from('maps').select('*', { count: 'exact', head: true })
-    ]);
-
-    // Obtener usuarios premium reales
-    const { data: allUsers } = await req.supabase.from('users').select('is_premium, premium_plan');
-    const premiumCount = allUsers?.filter(u => u.is_premium === true).length || 0;
-    const freeCount = (usersRes.count ?? 0) - premiumCount;
-
-    res.json({
-      stats: {
-        total_users: usersRes.count ?? 0,
-        total_resources: resourcesRes.count ?? 0,
-        total_downloads: downloadsRes.count ?? 0,
-        total_maps: mapsRes.count ?? 0,
-        premium_users: premiumCount,
-        free_users: freeCount
-      }
-    });
-  } catch (error) {
-    req.logger.error('Error getting stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // GET /api/admin/users - Listar todos los usuarios
 router.get('/users', async (req, res) => {
