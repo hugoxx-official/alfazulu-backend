@@ -110,6 +110,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Servir archivos estáticos (Flutter web build)
+app.use(express.static(path.join(__dirname, '../web')));
+
 // Servir archivos subidos estáticamente
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
