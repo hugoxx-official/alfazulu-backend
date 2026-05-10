@@ -27,6 +27,7 @@ import notificationsRoutes from './routes/notifications.js';
 import { startDriveSync, syncDriveFiles } from './services/driveSync.js';
 import { initTelegramBot, getBot, sendTelegramMessage } from './services/telegramBot.js';
 import { startPremiumExpirationCheck, startWeeklyNotifications } from './services/premiumExpiration.js';
+import { initFirebasePush } from './services/firebasePush.js';
 
 dotenv.config();
 
@@ -177,6 +178,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   logger.info(`Backend running on port ${PORT}`);
   const bot = initTelegramBot(logger);
   app.set('telegramBot', bot);
+
+  // Initialize Firebase Push Notifications
+  const firebaseMessaging = initFirebasePush();
+  app.set('firebaseMessaging', firebaseMessaging);
 
   // Iniciar jobs programados
   startPremiumExpirationCheck(supabase, logger, bot);

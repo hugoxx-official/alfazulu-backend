@@ -687,10 +687,59 @@ router.post('/resources', async (req, res) => {
   }
 });
 
+// POST /api/users/register-device - Registrar device token para push notifications
+router.post('/register-device', async (req, res) => {
+  try {
+    const { user_id, device_token, platform = 'android' } = req.body;
+
+    if (!user_id || !device_token) {
+      return res.status(400).json({ error: 'user_id and device_token required' });
+    }
+
+    // Check if token already exists
+    const { data: existing } = await req.supabase
+      .from('user_devices')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('device_token', device_token)
+      .single();
+
+    if (existing) {
+      // Update last_seen
+      await req.supabase
+        .from('user_devices')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', existing.id);
+      return res.json({ success: true, message: 'Token updated' });
+    }
+
+    // Insert new device token
+    const { data, error } = await req.supabase
+      .from('user_devices')
+      .insert([{
+        user_id,
+        device_token,
+        platform,
+        created_at: new Date().toISOString(),
+        last_seen: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    req.logger.info(`Device token registered for user ${user_id}`);
+    res.json({ success: true, device: data });
+  } catch (error) {
+    req.logger.error('Error registering device:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/admin/notify-all - Enviar notificación a todos los usuarios
 router.post('/notify-all', async (req, res) => {
   try {
-    const { title, message, type = 'admin' } = req.body;
+    const { title, message, type = 'admin', send_push = true } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({ error: 'Title and message required' });
@@ -719,18 +768,42 @@ router.post('/notify-all', async (req, res) => {
       await req.supabase.from('notifications').insert(batch);
     }
 
+    // Send push notifications if enabled
+    let pushSent = 0;
+    if (send_push) {
+      const { sendPushToMultiple } = await import('../services/firebasePush.js');
+
+      // Get all device tokens
+      const { data: devices } = await req.supabase
+        .from('user_devices')
+        .select('device_token');
+
+      if (devices && devices.length > 0) {
+        const tokens = [...new Set(devices.map(d => d.device_token))];
+
+        // Send in batches of 500 (FCM limit)
+        for (let i = 0; i < tokens.length; i += 500) {
+          const batch = tokens.slice(i, i + 500);
+          const result = await sendPushToMultiple(batch, title, message, { type });
+          if (result.success) {
+            pushSent += result.successCount || 0;
+          }
+        }
+      }
+    }
+
     // Notificar a Telegram
     const bot = req.app.get('telegramBot');
     if (bot) {
       await bot.sendMessage(
         process.env.TELEGRAM_CHAT_ID,
-        `📢 *NOTIFICACIÓN ENVIADA*\n📦 A: ${allUsers.length} usuarios\n📝 Título: ${title}`,
+        `📢 *NOTIFICACIÓN ENVIADA*\n📦 A: ${allUsers.length} usuarios\n🔔 Push: ${pushSent}\n📝 Título: ${title}`,
         { parse_mode: 'Markdown' }
       ).catch(() => {});
     }
 
-    req.logger.info(`Notificación enviada a ${allUsers.length} usuarios`);
-    res.json({ success: true, sent: allUsers.length });
+    req.logger.info(`Notificación enviada a ${allUsers.length} usuarios, push a ${pushSent} dispositivos`);
+    res.json({ success: true, sent: allUsers.length, push_sent: pushSent });
   } catch (error) {
     req.logger.error('Error sending notification:', error);
     res.status(500).json({ error: error.message });

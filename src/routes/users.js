@@ -112,4 +112,53 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/users/register-device - Registrar device token para push notifications
+router.post('/register-device', async (req, res) => {
+  try {
+    const { user_id, device_token, platform = 'android' } = req.body;
+
+    if (!user_id || !device_token) {
+      return res.status(400).json({ error: 'user_id and device_token required' });
+    }
+
+    // Check if token already exists
+    const { data: existing } = await req.supabase
+      .from('user_devices')
+      .select('id')
+      .eq('user_id', user_id)
+      .eq('device_token', device_token)
+      .single();
+
+    if (existing) {
+      // Update last_seen
+      await req.supabase
+        .from('user_devices')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', existing.id);
+      return res.json({ success: true, message: 'Token updated' });
+    }
+
+    // Insert new device token
+    const { data, error } = await req.supabase
+      .from('user_devices')
+      .insert([{
+        user_id,
+        device_token,
+        platform,
+        created_at: new Date().toISOString(),
+        last_seen: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    req.logger.info(`Device token registered for user ${user_id}`);
+    res.json({ success: true, device: data });
+  } catch (error) {
+    req.logger.error('Error registering device:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
