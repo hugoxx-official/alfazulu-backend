@@ -58,6 +58,39 @@ router.patch('/:id/premium', async (req, res) => {
 
     if (error) throw error;
 
+    // Create in-app notification
+    await req.supabase.from('notifications').insert({
+      user_id: id,
+      title: is_premium ? '¡Premium Activado!' : 'Premium Desactivado',
+      message: is_premium
+        ? `Tu plan ${premium_plan || 'Premium'} ha sido activado. Disfruta de todas las características.`
+        : 'Tu suscripción premium ha finalizado.',
+      type: 'premium'
+    });
+
+    // Send push notification if premium is activated
+    if (is_premium === true) {
+      try {
+        const { sendPushToMultiple } = await import('../services/firebasePush.js');
+        const { data: devices } = await req.supabase
+          .from('user_devices')
+          .select('device_token')
+          .eq('user_id', id);
+
+        if (devices && devices.length > 0) {
+          const tokens = [...new Set(devices.map(d => d.device_token))];
+          await sendPushToMultiple(
+            tokens,
+            '¡Premium Activado!',
+            `Tu plan ${premium_plan || 'Premium'} ha sido activado. Disfruta de todas las características.`,
+            { type: 'premium', user_id: id }
+          );
+        }
+      } catch (pushError) {
+        req.logger.error('Error sending premium push:', pushError);
+      }
+    }
+
     // Log a Telegram
     const bot = req.app.get('telegramBot');
     if (bot && is_premium === true) {
