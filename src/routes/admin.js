@@ -567,12 +567,20 @@ router.delete('/resources/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { error } = await req.supabase
+    const { data, error } = await req.supabase
       .from('resources')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      req.logger.error('Supabase error deleting resource:', error);
+      return res.status(500).json({ error: error.message, details: error });
+    }
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
 
     // Log a Telegram
     const bot = req.app.get('telegramBot');
