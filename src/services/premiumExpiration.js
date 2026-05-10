@@ -59,6 +59,27 @@ export function startPremiumExpirationCheck(supabase, logger, telegramBot) {
             type: 'premium'
           }]);
 
+        // Send push notification
+        try {
+          const { sendPushToMultiple } = await import('./firebasePush.js');
+          const { data: devices } = await supabase
+            .from('user_devices')
+            .select('device_token')
+            .eq('user_id', user.id);
+
+          if (devices && devices.length > 0) {
+            const tokens = [...new Set(devices.map(d => d.device_token))];
+            await sendPushToMultiple(
+              tokens,
+              '⏰ Premium Caducado',
+              'Tu suscripción premium ha finalizado. ¡Renueva para seguir accediendo a contenido exclusivo!',
+              { type: 'premium_expired', user_id: user.id }
+            );
+          }
+        } catch (pushError) {
+          logger.error('Error sending premium expired push:', pushError);
+        }
+
         // Notificar a Telegram
         if (telegramBot && process.env.TELEGRAM_CHAT_ID) {
           await telegramBot.sendMessage(
