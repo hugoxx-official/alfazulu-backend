@@ -47049,7 +47049,7 @@ r=A.a8(20)
 n=n.y
 n===$&&A.a()
 n=A.T(B.c.a6(255*(0.3+0.4*n.b.T(n.a.gp()))),B.e.m()>>>16&255,B.e.m()>>>8&255,B.e.m()&255)
-return A.aoj(m*0.05,A.b6(o,A.aGC(r,new A.N6(new A.vc(n,B.DP,o,B.Gq),new A.vu(A.aND(o,o,new A.zN("assets/logo2.png",o,o)),new A.aBr(),B.Ee,o),o),B.cj),B.n,o,o,new A.aG(o,o,o,s,q,o,B.A),o,140,o,o,o,o,140))},
+return A.aoj(m*0.05,A.b6(o,A.aGC(r,new A.N6(new A.vc(n,B.DP,o,B.Gq),new A.vu(A.aND(o,o,new A.zN("logo2.png",o,o)),new A.aBr(),B.Ee,o),o),B.cj),B.n,o,o,new A.aG(o,o,o,s,q,o,B.A),o,140,o,o,o,o,140))},
 $S:121}
 A.aBr.prototype={
 $3(a,b,c){var s=null
